@@ -1,5 +1,19 @@
 use clap::{App, Arg};
 use reqwest::header;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+pub struct SlackProfile {
+    pub email: String,
+    pub display_name: String,
+    pub status_emoji: String,
+    pub status_expiration: i32,
+}
+
+#[derive(Deserialize)]
+struct SlackResponse {
+    profile: Option<SlackProfile>,
+}
 
 #[tokio::main]
 async fn main() {
@@ -9,7 +23,7 @@ async fn main() {
 async fn run() {
     let matches = App::new("slack-vacation")
         .version("1.0.0")
-        .author("okaponta")
+        .author("@okaponta")
         .about("reveals you're in vacation in slack!!")
         .arg(
             Arg::new("token")
@@ -57,15 +71,13 @@ fn today() -> &'static str {
 }
 
 const SET_URI: &str = "https://slack.com/api/users.profile.set";
+const GET_URI: &str = "https://slack.com/api/users.profile.get";
 
 async fn go_to_vacation(token: &str, date: &str) {
     println!("I'm going to vacation: {} {}", token, date);
-    // let client = slack_api::default_client().unwrap();
-    // let mut request = SetRequest::default();
-    // request.name = Some("display_name");
-    // request.value = Some("oka");
-    // let res = slack_api::users_profile::set(&client, &token, &request).await;
-    // println!("{:?}", res);
+
+    let prev = get_username(token).await;
+    let next = prev + "(" + date + "休)";
 
     let mut headers = header::HeaderMap::new();
     headers.insert(
@@ -81,14 +93,12 @@ async fn go_to_vacation(token: &str, date: &str) {
         header::HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
     );
 
-    //let q = "[("foo", "a"), ("foo", "b")]";
-
     let response = reqwest::ClientBuilder::new()
         .default_headers(headers)
         .build()
         .unwrap()
         .post(SET_URI)
-        .query(&[("name", "display_name"), ("value", "okaponta")])
+        .query(&[("name", "display_name"), ("value", &next)])
         .send()
         .await
         .unwrap()
@@ -101,4 +111,37 @@ async fn go_to_vacation(token: &str, date: &str) {
 
 fn back_from_vacation(token: &str) {
     println!("I'm back from vacation: {}", token);
+}
+
+async fn get_username(token: &str) -> String {
+    println!("I'm going to vacation: {}", token);
+
+    let mut headers = header::HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        header::HeaderValue::from_str("application/x-www-form-urlencoded").unwrap(),
+    );
+    headers.insert(
+        header::AUTHORIZATION,
+        header::HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
+    );
+
+    let response = reqwest::ClientBuilder::new()
+        .default_headers(headers)
+        .build()
+        .unwrap()
+        .get(GET_URI)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+
+    println!("{}", response);
+
+    let response_struct: SlackResponse = serde_json::from_str(&response).unwrap();
+    let disp_name = response_struct.profile.unwrap().display_name;
+
+    disp_name
 }
