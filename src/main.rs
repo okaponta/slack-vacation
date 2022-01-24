@@ -1,4 +1,6 @@
+use chrono::{Duration, Local};
 use clap::{App, Arg};
+use regex::Regex;
 use reqwest::header;
 use serde::Deserialize;
 
@@ -53,11 +55,11 @@ async fn run() {
     if let Some(token) = matches.value_of("token") {
         println!("token specified: {}", token);
         if matches.is_present("back") {
-            back_from_vacation(token);
+            back_from_vacation(token).await;
         } else {
             match matches.value_of("date") {
                 Some(date) => go_to_vacation(token, date).await,
-                None => go_to_vacation(token, today()).await,
+                None => go_to_vacation(token, &tomorrow()).await,
             }
         }
     } else {
@@ -66,8 +68,10 @@ async fn run() {
     }
 }
 
-fn today() -> &'static str {
-    "2020"
+fn tomorrow() -> String {
+    let dt = Local::now();
+    let tom = dt + Duration::days(1);
+    tom.format("%m/%d").to_string()
 }
 
 const SET_URI: &str = "https://slack.com/api/users.profile.set";
@@ -109,8 +113,40 @@ async fn go_to_vacation(token: &str, date: &str) {
     println!("{}", response);
 }
 
-fn back_from_vacation(token: &str) {
+async fn back_from_vacation(token: &str) {
     println!("I'm back from vacation: {}", token);
+    let prev = get_username(token).await;
+    let re = Regex::new(r"\(.*休\)").unwrap();
+    let next = re.replace_all(&prev, "").to_string();
+    println!("{}", next);
+    let mut headers = header::HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        header::HeaderValue::from_str("application/json; charset=utf-8").unwrap(),
+    );
+    headers.insert(
+        header::CONTENT_TYPE,
+        header::HeaderValue::from_str("application/x-www-form-urlencoded").unwrap(),
+    );
+    headers.insert(
+        header::AUTHORIZATION,
+        header::HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
+    );
+
+    let response = reqwest::ClientBuilder::new()
+        .default_headers(headers)
+        .build()
+        .unwrap()
+        .post(SET_URI)
+        .query(&[("name", "display_name"), ("value", &next)])
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+
+    println!("{}", response);
 }
 
 async fn get_username(token: &str) -> String {
