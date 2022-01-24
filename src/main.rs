@@ -4,6 +4,9 @@ use regex::Regex;
 use reqwest::header::{self, HeaderMap};
 use serde::Deserialize;
 
+const SET_URI: &str = "https://slack.com/api/users.profile.set";
+const GET_URI: &str = "https://slack.com/api/users.profile.get";
+
 #[derive(Deserialize)]
 pub struct SlackProfile {
     pub email: String,
@@ -74,9 +77,6 @@ fn tomorrow() -> String {
     let tom = dt + Duration::days(1);
     tom.format("%m/%d").to_string()
 }
-
-const SET_URI: &str = "https://slack.com/api/users.profile.set";
-const GET_URI: &str = "https://slack.com/api/users.profile.get";
 
 async fn go_to_vacation(token: &str, date: &str) {
     println!("I'm going to vacation: {} {}", token, date);
